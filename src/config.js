@@ -28,6 +28,10 @@ module.exports = {
 
   enableDelete: false,
 
+  // Path to persistent storage JSON file.
+  // Used when Upstash env vars are not set.
+  storagePath: process.env.STORAGE_PATH || './data/cloud-data.json',
+
   logging: {
     console: true,
 
