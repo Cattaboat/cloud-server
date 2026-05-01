@@ -63,6 +63,12 @@ function createSetMessage(name, value) {
 }
 
 const buffered = new Map();
+function tryPersist(fn) {
+  fn().catch((error) => {
+    logger.error('Failed to persist cloud variables: ' + error);
+  });
+}
+
 function sendBuffered() {
   if (buffered.size > 0) {
     for (const [client, messages] of buffered.entries()) {
@@ -157,8 +163,9 @@ wss.on('connection', (ws, req) => {
 
     if (!client.room) throw new ConnectionError(ConnectionError.Error, 'No room setup yet');
 
-    client.room.delete(variable);
-    await storage.deleteRoomVariable(client.room.id, variable);
+    const room = client.room;
+    room.delete(variable);
+    tryPersist(() => storage.deleteRoomVariable(room.id, variable));
   }
 
   async function performRename(oldName, newName) {
@@ -173,10 +180,11 @@ wss.on('connection', (ws, req) => {
     }
 
     // get throws if old name does not exist
-    const value = client.room.get(oldName);
-    client.room.delete(oldName);
-    client.room.create(newName, value);
-    await storage.renameRoomVariable(client.room.id, oldName, newName, value);
+    const room = client.room;
+    const value = room.get(oldName);
+    room.delete(oldName);
+    room.create(newName, value);
+    tryPersist(() => storage.renameRoomVariable(room.id, oldName, newName, value));
   }
 
   async function performSet(variable, value) {
@@ -194,8 +202,6 @@ wss.on('connection', (ws, req) => {
       client.room.create(variable, value);
     }
 
-    await storage.saveRoomVariable(client.room.id, variable, value);
-
     // Generate the send message only when a client will actually hear it.
     const clients = client.room.getClients();
     if (clients.length > 1) {
@@ -206,6 +212,9 @@ wss.on('connection', (ws, req) => {
         }
       }
     }
+
+    const room = client.room;
+    tryPersist(() => storage.saveRoomVariable(room.id, variable, value));
   }
 
   async function processMessage(data) {

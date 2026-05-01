@@ -7,6 +7,15 @@ const storagePath = config.storagePath;
 
 let loaded = false;
 let state = {rooms: {}};
+let persistenceEnabled = true;
+
+function disablePersistence(reason) {
+  if (!persistenceEnabled) {
+    return;
+  }
+  persistenceEnabled = false;
+  logger.error('Persistent storage has been disabled for this process: ' + reason);
+}
 
 async function ensureLoaded() {
   if (loaded) {
@@ -30,11 +39,18 @@ async function ensureLoaded() {
 }
 
 async function flush() {
+  if (!persistenceEnabled) {
+    return;
+  }
   const directory = path.dirname(storagePath);
-  await fs.mkdir(directory, {recursive: true});
-  const tempPath = storagePath + '.tmp';
-  await fs.writeFile(tempPath, JSON.stringify(state), 'utf8');
-  await fs.rename(tempPath, storagePath);
+  try {
+    await fs.mkdir(directory, {recursive: true});
+    const tempPath = storagePath + '.tmp';
+    await fs.writeFile(tempPath, JSON.stringify(state), 'utf8');
+    await fs.rename(tempPath, storagePath);
+  } catch (error) {
+    disablePersistence(error);
+  }
 }
 
 async function loadRoomVariables(roomId) {
