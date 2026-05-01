@@ -6,7 +6,7 @@ It uses a protocol very similar to Scratch 3's cloud variable protocol. See doc/
 
 ## Restrictions
 
-This server does not implement long term variable storage. All data is stored only in memory (never on disk) and are removed promptly when rooms are emptied or the server restarts.
+By default, this server stores variables only in memory. If no persistence backend is configured, data is removed when the process restarts.
 
 This server also does not implement history logs.
 
@@ -46,6 +46,19 @@ Set `anonymizeAddresses` to `true` if you want IP addresses to be not be logged.
 Set `perMessageDeflate` to an object to enable "permessage-deflate", which uses compression to reduce the bandwidth of data transfers. This can lead to poor performance and catastrophic memory fragmentation on Linux (https://github.com/nodejs/node/issues/8871). See here for options: https://github.com/websockets/ws/blob/master/doc/ws.md#new-websocketserveroptions-callback (look for `perMessageDeflate`)
 
 You can configure logging with the `logging` property of src/config.js. By default cloud-server logs to stdout and to files in the `logs` folder. stdout logging can be disabled by setting `logging.console` to false. File logging is configured with `logging.rotation`, see here for options: https://github.com/winstonjs/winston-daily-rotate-file#options. Set to false to disable.
+
+### Persistent storage
+
+The server supports two persistence modes:
+
+1. **Upstash Redis (recommended on free Render):**
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+
+2. **File-backed storage (default fallback):**
+   - `STORAGE_PATH` (defaults to `./data/cloud-data.json`)
+
+If both Upstash variables are set, Redis is used. Otherwise, file-backed storage is used.
 
 ### Production setup
 
