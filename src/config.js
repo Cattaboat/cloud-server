@@ -28,6 +28,10 @@ module.exports = {
 
   enableDelete: false,
 
+  // Path to persistent storage JSON file.
+  // On Render, point this to a mounted persistent disk path.
+  storagePath: process.env.STORAGE_PATH || './data/cloud-data.json',
+
   logging: {
     console: true,
 
