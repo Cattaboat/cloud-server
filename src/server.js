@@ -8,6 +8,7 @@ const validators = require('./validators');
 const logger = require('./logger');
 const naughty = require('./naughty');
 const config = require('./config');
+const storage = require('./storage');
 
 const wss = new WebSocket.Server({
   noServer: true, // we setup the server on our own
@@ -103,7 +104,7 @@ wss.on('connection', (ws, req) => {
 
   connectionManager.handleConnect(client);
 
-  function performHandshake(roomId, username) {
+  async function performHandshake(roomId, username) {
     if (client.room) throw new ConnectionError(ConnectionError.Error, 'Already performed handshake');
     if (!validators.isValidRoomID(roomId)) {
       const roomToLog = `${roomId}`.substr(0, 100);
@@ -131,18 +132,25 @@ wss.on('connection', (ws, req) => {
         client.send(messages.join('\n'));
       }
     } else {
-      client.setRoom(rooms.create(roomId));
+      const room = rooms.create(roomId);
+      const storedVariables = await storage.loadRoomVariables(roomId);
+      if (storedVariables) {
+        for (const [name, value] of Object.entries(storedVariables)) {
+          room.create(name, value);
+        }
+      }
+      client.setRoom(room);
     }
 
     // @ts-expect-error
     client.log(`Joined room (peers: ${client.room.getClients().length})`);
   }
 
-  function performCreate(variable, value) {
-    performSet(variable, value);
+  async function performCreate(variable, value) {
+    await performSet(variable, value);
   }
 
-  function performDelete(variable) {
+  async function performDelete(variable) {
     if (!config.enableDelete) {
       return;
     }
@@ -150,9 +158,10 @@ wss.on('connection', (ws, req) => {
     if (!client.room) throw new ConnectionError(ConnectionError.Error, 'No room setup yet');
 
     client.room.delete(variable);
+    await storage.deleteRoomVariable(client.room.id, variable);
   }
 
-  function performRename(oldName, newName) {
+  async function performRename(oldName, newName) {
     if (!config.enableRename) {
       return;
     }
@@ -166,10 +175,11 @@ wss.on('connection', (ws, req) => {
     // get throws if old name does not exist
     const value = client.room.get(oldName);
     client.room.delete(oldName);
-    client.room.set(newName, value);
+    client.room.create(newName, value);
+    await storage.renameRoomVariable(client.room.id, oldName, newName, value);
   }
 
-  function performSet(variable, value) {
+  async function performSet(variable, value) {
     if (!client.room) throw new ConnectionError(ConnectionError.Error, 'No room setup yet');
 
     if (!validators.isValidVariableValue(value)) {
@@ -184,6 +194,8 @@ wss.on('connection', (ws, req) => {
       client.room.create(variable, value);
     }
 
+    await storage.saveRoomVariable(client.room.id, variable, value);
+
     // Generate the send message only when a client will actually hear it.
     const clients = client.room.getClients();
     if (clients.length > 1) {
@@ -196,29 +208,29 @@ wss.on('connection', (ws, req) => {
     }
   }
 
-  function processMessage(data) {
+  async function processMessage(data) {
     const message = parseMessage(data.toString());
     const method = message.method;
 
     switch (method) {
       case 'handshake':
-        performHandshake('' + message.project_id, message.user);
+        await performHandshake('' + message.project_id, message.user);
         break;
 
       case 'set':
-        performSet(message.name, message.value);
+        await performSet(message.name, message.value);
         break;
 
       case 'create':
-        performCreate(message.name, message.value);
+        await performCreate(message.name, message.value);
         break;
 
       case 'delete':
-        performDelete(message.name);
+        await performDelete(message.name);
         break;
 
       case 'rename':
-        performRename(message.name, message.new_name);
+        await performRename(message.name, message.new_name);
         break;
 
       default:
@@ -228,7 +240,7 @@ wss.on('connection', (ws, req) => {
 
   client.log('Connection opened');
 
-  ws.on('message', (data, isBinary) => {
+  ws.on('message', async (data, isBinary) => {
     // Ignore data after the socket is closed
     if (ws.readyState !== ws.OPEN) {
       return;
@@ -238,7 +250,7 @@ wss.on('connection', (ws, req) => {
     }
 
     try {
-      processMessage(data);
+      await processMessage(data);
     } catch (error) {
       client.error('Error handling connection: ' + error);
       if (error instanceof ConnectionError) {

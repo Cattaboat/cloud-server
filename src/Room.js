@@ -97,7 +97,7 @@ class Room {
    * Create a new variable.
    * This method does not inform clients of the change.
    * @param {string} name The name of the variable
-   * @param {string} value The value of the variable
+   * @param {Value} value The value of the variable
    * @throws Will throw if the variable already exists, or there are too many variables.
    */
   create(name, value) {
