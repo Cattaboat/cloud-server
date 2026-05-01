@@ -123,10 +123,8 @@ wss.on('connection', (ws, req) => {
 
     client.setUsername(username);
 
-    if (rooms.has(roomId)) {
-      const room = rooms.get(roomId);
-      client.setRoom(room);
-
+    /** @param {import('./Room')} room */
+    function sendRoomVariablesToClient(room) {
       // Send the data of all the variables in the room to the client.
       // This is done in one message by separating each "set" with a newline.
       /** @type {string[]} */
@@ -137,6 +135,12 @@ wss.on('connection', (ws, req) => {
       if (messages.length > 0) {
         client.send(messages.join('\n'));
       }
+    }
+
+    if (rooms.has(roomId)) {
+      const room = rooms.get(roomId);
+      client.setRoom(room);
+      sendRoomVariablesToClient(room);
     } else {
       const room = rooms.create(roomId);
       const storedVariables = await storage.loadRoomVariables(roomId);
@@ -146,6 +150,7 @@ wss.on('connection', (ws, req) => {
         }
       }
       client.setRoom(room);
+      sendRoomVariablesToClient(room);
     }
 
     // @ts-expect-error
